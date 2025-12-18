@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "bun:test
 import { mkdir, writeFile } from "fs/promises";
 import { bunExe, bunEnv as env, tmpdirSync } from "harness";
 import { join, relative } from "path";
-import { dummyAfterAll, dummyAfterEach, dummyBeforeAll, dummyBeforeEach, package_dir } from "./dummy.registry";
+import { dummyAfterAll, dummyAfterEach, dummyBeforeAll, dummyBeforeEach, dummyRegistry, package_dir, setHandler } from "./dummy.registry";
 
 beforeAll(dummyBeforeAll);
 afterAll(dummyAfterAll);
@@ -155,6 +155,60 @@ it("should remove existing package", async () => {
       2,
     ),
   );
+});
+
+it("should allow removing dependency with exact uppercase key", async () => {
+  const urls: string[] = [];
+  setHandler(dummyRegistry(urls));
+
+  await writeFile(
+    join(package_dir, "package.json"),
+    JSON.stringify({
+      name: "foo",
+      version: "0.0.1",
+    }),
+  );
+
+  const { exited: addExited } = spawn({
+    cmd: [bunExe(), "add", "bar"],
+    cwd: package_dir,
+    stdout: "ignore",
+    stdin: "pipe",
+    stderr: "pipe",
+    env,
+  });
+  expect(await addExited).toBe(0);
+
+  // Simulate a pre-existing project state where the dependency key is capitalized.
+  await writeFile(
+    join(package_dir, "package.json"),
+    JSON.stringify(
+      {
+        name: "foo",
+        version: "0.0.1",
+        dependencies: {
+          Bar: "^0.0.2",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  const { exited: rmExited } = spawn({
+    cmd: [bunExe(), "remove", "Bar"],
+    cwd: package_dir,
+    stdout: "ignore",
+    stdin: "pipe",
+    stderr: "pipe",
+    env,
+  });
+  expect(await rmExited).toBe(0);
+
+  expect(await file(join(package_dir, "package.json")).json()).toEqual({
+    name: "foo",
+    version: "0.0.1",
+  });
 });
 
 it("should not reject missing package", async () => {

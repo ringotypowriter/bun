@@ -199,6 +199,90 @@ it("bun add --only-missing should not install existing package", async () => {
   }
 });
 
+it("bun add should normalize npm package names to lowercase", async () => {
+  const urls: string[] = [];
+  setHandler(async request => {
+    urls.push(request.url);
+    const url = new URL(request.url);
+
+    expect(request.method).toBe("GET");
+
+    if (url.pathname === "/bar-0.0.2.tgz") {
+      return new Response(file(join(import.meta.dir, "bar-0.0.2.tgz")));
+    }
+
+    expect(request.headers.get("accept")).toBe(
+      "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*",
+    );
+    if (check_npm_auth_type.check) {
+      expect(request.headers.get("npm-auth-type")).toBe(null);
+    }
+    expect(await request.text()).toBe("");
+
+    // Requests for npm package metadata may be normalized (e.g. "Bar" -> "/bar"),
+    // but the stored package name should follow the registry manifest ("bar").
+    if (url.pathname !== "/bar" && url.pathname !== "/Bar") {
+      return new Response("Not found", { status: 404 });
+    }
+
+    return new Response(
+      JSON.stringify({
+        name: "bar",
+        versions: {
+          "0.0.2": {
+            name: "bar",
+            version: "0.0.2",
+            dist: {
+              tarball: `${root_url}/bar-0.0.2.tgz`,
+            },
+          },
+        },
+        "dist-tags": {
+          latest: "0.0.2",
+        },
+      }),
+    );
+  });
+
+  await writeFile(
+    join(package_dir, "package.json"),
+    JSON.stringify({
+      name: "foo",
+      version: "0.0.1",
+    }),
+  );
+
+  const { stderr, exited } = spawn({
+    cmd: [bunExe(), "add", "Bar"],
+    cwd: package_dir,
+    stdout: "ignore",
+    stdin: "pipe",
+    stderr: "pipe",
+    env: {
+      ...env,
+      // Force the dummy registry (ignore user/global config).
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      // Isolate install cache so this test can't hit disk cache and skip requests.
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
+  });
+
+  const err = await stderr.text();
+  expect(err).not.toContain("error:");
+  expect(err).toContain("Saved lockfile");
+  expect(await exited).toBe(0);
+
+  expect(urls).toContain(`${root_url}/bar-0.0.2.tgz`);
+  expect(urls.some(u => u === `${root_url}/bar` || u === `${root_url}/Bar`)).toBe(true);
+  expect(requested).toBe(2);
+  const pkg = await file(join(package_dir, "package.json")).json();
+  expect(pkg.name).toBe("foo");
+  expect(pkg.version).toBe("0.0.1");
+  expect(Object.keys(pkg.dependencies)).toEqual(["bar"]);
+  expect(typeof pkg.dependencies.bar).toBe("string");
+  expect(await readdirSorted(join(package_dir, "node_modules"))).toEqual([".cache", "bar"]);
+});
+
 it("bun add --analyze should scan dependencies", async () => {
   const urls: string[] = [];
   setHandler(dummyRegistry(urls));

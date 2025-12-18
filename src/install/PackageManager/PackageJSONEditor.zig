@@ -557,10 +557,16 @@ pub fn edit(
                     }
                 }
 
+                const resolved_name = request.getResolvedName(manager.lockfile);
+                const key_name = if (strings.isNPMPackageName(resolved_name))
+                    try asciiLowercaseDupe(allocator, resolved_name)
+                else
+                    try allocator.dupe(u8, resolved_name);
+
                 new_dependencies.items[k].key = JSAst.Expr.allocate(
                     allocator,
                     JSAst.E.String,
-                    .{ .data = try allocator.dupe(u8, request.getResolvedName(manager.lockfile)) },
+                    .{ .data = key_name },
                     logger.Loc.Empty,
                 );
 
@@ -773,6 +779,12 @@ pub fn edit(
             };
         }
     }
+}
+
+fn asciiLowercaseDupe(allocator: std.mem.Allocator, input: []const u8) ![]u8 {
+    const out = try allocator.alloc(u8, input.len);
+    for (out, input) |*dst, src| dst.* = std.ascii.toLower(src);
+    return out;
 }
 
 const trusted_dependencies_string = "trustedDependencies";

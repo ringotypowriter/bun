@@ -1888,6 +1888,22 @@ pub const PackageManifest = struct {
             .string_pool = string_pool,
         };
 
+        // Prefer the registry-provided canonical package name when it is the same
+        // as the requested name (case-insensitively). This avoids treating
+        // different casings as different packages, while still allowing custom
+        // registries to return a different logical name when that happens.
+        const stored_name: []const u8 = brk: {
+            if (json.asProperty("name")) |name_q| {
+                if (name_q.expr.asString(allocator)) |received_name| {
+                    if (strings.eqlLong(expected_name, received_name, true)) {
+                        break :brk received_name;
+                    }
+                }
+            }
+
+            break :brk expected_name;
+        };
+
         if (PackageManager.verbose_install) {
             if (json.asProperty("name")) |name_q| {
                 const received_name = name_q.expr.asString(allocator) orelse return null;
@@ -1900,7 +1916,7 @@ pub const PackageManifest = struct {
             }
         }
 
-        string_builder.count(expected_name);
+        string_builder.count(stored_name);
 
         if (json.asProperty("modified")) |name_q| {
             const field = name_q.expr.asString(allocator) orelse return null;
@@ -2116,9 +2132,7 @@ pub const PackageManifest = struct {
             string_buf = ptr[0..string_builder.cap];
         }
 
-        // Using `expected_name` instead of the name from the manifest. Custom registries might
-        // have a different name than the dependency name in package.json.
-        result.pkg.name = string_builder.append(ExternalString, expected_name);
+        result.pkg.name = string_builder.append(ExternalString, stored_name);
 
         get_versions: {
             if (json.asProperty("versions")) |versions_q| {

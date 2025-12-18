@@ -136,7 +136,11 @@ fn updatePackageJSONAndInstallWithManagerWithUpdates(
         .remove => {
             // if we're removing, they don't have to specify where it is installed in the dependencies list
             // they can even put it multiple times and we will just remove all of them
-            for (updates.*) |request| {
+            var write_i: usize = 0;
+            const updates_slice = updates.*;
+            for (updates_slice) |request| {
+                var removed_this_request = false;
+
                 inline for ([_]string{ "dependencies", "devDependencies", "optionalDependencies", "peerDependencies" }) |list| {
                     if (current_package_json.root.asProperty(list)) |query| {
                         if (query.expr.data == .e_object) {
@@ -154,6 +158,7 @@ fn updatePackageJSONAndInstallWithManagerWithUpdates(
                                         }
 
                                         any_changes = true;
+                                        removed_this_request = true;
                                     }
                                 }
                             }
@@ -178,7 +183,16 @@ fn updatePackageJSONAndInstallWithManagerWithUpdates(
                         }
                     }
                 }
+
+                // For `bun remove`, treat the user input as-is: only uninstall packages we actually
+                // removed from package.json (case-sensitive match on the dependency key).
+                if (removed_this_request) {
+                    updates_slice[write_i] = request;
+                    write_i += 1;
+                }
             }
+
+            updates.* = updates_slice[0..write_i];
         },
 
         .link, .add, .update => {
