@@ -136,30 +136,56 @@ fn updatePackageJSONAndInstallWithManagerWithUpdates(
         .remove => {
             // if we're removing, they don't have to specify where it is installed in the dependencies list
             // they can even put it multiple times and we will just remove all of them
-            var write_i: usize = 0;
-            const updates_slice = updates.*;
-            for (updates_slice) |request| {
-                var removed_this_request = false;
+            var removed_updates: UpdateRequest.Array = .{};
+            const input_updates = updates.*;
 
+            for (input_updates) |request| {
                 inline for ([_]string{ "dependencies", "devDependencies", "optionalDependencies", "peerDependencies" }) |list| {
                     if (current_package_json.root.asProperty(list)) |query| {
                         if (query.expr.data == .e_object) {
                             var dependencies = query.expr.data.e_object.properties.slice();
+                            var new_len: usize = dependencies.len;
                             var i: usize = 0;
-                            var new_len = dependencies.len;
-                            while (i < dependencies.len) : (i += 1) {
-                                if (dependencies[i].key.?.data == .e_string) {
-                                    if (dependencies[i].key.?.data.e_string.eql(string, request.name)) {
-                                        if (new_len > 1) {
-                                            dependencies[i] = dependencies[new_len - 1];
-                                            new_len -= 1;
-                                        } else {
-                                            new_len = 0;
-                                        }
 
-                                        any_changes = true;
-                                        removed_this_request = true;
-                                    }
+                            while (i < new_len) {
+                                const key_expr = dependencies[i].key orelse {
+                                    i += 1;
+                                    continue;
+                                };
+                                if (key_expr.data != .e_string) {
+                                    i += 1;
+                                    continue;
+                                }
+
+                                const key_str = key_expr.data.e_string;
+
+                                const matches = if (manager.options.global and strings.isNPMPackageName(request.name) and key_str.isUTF8() and key_str.next == null)
+                                    strings.eqlCaseInsensitiveASCIIICheckLength(key_str.data, request.name)
+                                else
+                                    key_str.eql(string, request.name);
+
+                                if (!matches) {
+                                    i += 1;
+                                    continue;
+                                }
+
+                                // Track what we actually removed so subsequent cleanup can delete the right
+                                // node_modules folders, even when the user passed a different casing.
+                                var removed_request = request;
+                                removed_request.is_aliased = true;
+                                removed_request.name = bun.handleOom(manager.allocator.dupe(u8, if (key_str.isUTF8() and key_str.next == null) key_str.data else request.name));
+                                removed_request.name_hash = String.Builder.stringHash(removed_request.name);
+                                bun.handleOom(removed_updates.append(manager.allocator, removed_request));
+
+                                any_changes = true;
+
+                                if (new_len > 1) {
+                                    dependencies[i] = dependencies[new_len - 1];
+                                    new_len -= 1;
+                                    continue;
+                                } else {
+                                    new_len = 0;
+                                    break;
                                 }
                             }
 
@@ -183,16 +209,12 @@ fn updatePackageJSONAndInstallWithManagerWithUpdates(
                         }
                     }
                 }
-
-                // For `bun remove`, treat the user input as-is: only uninstall packages we actually
-                // removed from package.json (case-sensitive match on the dependency key).
-                if (removed_this_request) {
-                    updates_slice[write_i] = request;
-                    write_i += 1;
-                }
             }
 
-            updates.* = updates_slice[0..write_i];
+            // For `bun remove`, treat the user input as-is by default. In global mode,
+            // we match npm package names case-insensitively, but only uninstall packages
+            // we actually removed from package.json.
+            updates.* = removed_updates.items;
         },
 
         .link, .add, .update => {

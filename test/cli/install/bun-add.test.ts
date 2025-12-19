@@ -544,7 +544,13 @@ it("should add dependency with capital letters", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      // Force the dummy registry (ignore user/global config).
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      // Isolate install cache so this test can't hit disk cache and skip requests.
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -598,7 +604,11 @@ it("should add exact version with --exact", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -651,7 +661,11 @@ it("should add to devDependencies with --dev", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -705,7 +719,11 @@ it("should add to optionalDependencies with --optional", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -758,7 +776,11 @@ it("should add to peerDependencies with --peer", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -813,7 +835,11 @@ it("should add exact version with install.exact", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
@@ -867,7 +893,11 @@ it("should add exact version with -E", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).toContain("Saved lockfile");

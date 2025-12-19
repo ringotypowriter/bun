@@ -412,7 +412,29 @@ pub fn edit(
                         if (query.expr.data == .e_object) {
                             const name = request.getName();
 
-                            if (query.expr.asProperty(name)) |value| {
+                            const maybe_value: ?Expr.Query = maybe_value: {
+                                if (manager.options.global and strings.isNPMPackageName(name)) {
+                                    const props = query.expr.data.e_object.properties.sliceConst();
+                                    for (props, 0..) |prop, prop_i| {
+                                        const key = prop.key orelse continue;
+                                        if (key.data != .e_string) continue;
+                                        const key_str = key.data.e_string;
+                                        if (!(key_str.isUTF8() and key_str.next == null)) continue;
+                                        if (!strings.eqlCaseInsensitiveASCIIICheckLength(key_str.data, name)) continue;
+                                        break :maybe_value .{
+                                            .expr = prop.value orelse continue,
+                                            .loc = prop.loc,
+                                            .i = @intCast(prop_i),
+                                        };
+                                    }
+
+                                    break :maybe_value null;
+                                }
+
+                                break :maybe_value query.expr.asProperty(name);
+                            };
+
+                            if (maybe_value) |value| {
                                 if (value.expr.data == .e_string) {
                                     if (request.package_id != invalid_package_id and strings.eqlLong(list, dependency_list, true)) {
                                         replacing += 1;
@@ -548,7 +570,13 @@ pub fn edit(
             while (k < new_dependencies.items.len) : (k += 1) {
                 if (new_dependencies.items[k].key) |key| {
                     const name = request.getName();
-                    if (!key.data.e_string.eql(string, name)) continue;
+                    if (manager.options.global and strings.isNPMPackageName(name)) {
+                        const key_str = key.data.e_string;
+                        if (!(key_str.isUTF8() and key_str.next == null)) continue;
+                        if (!strings.eqlCaseInsensitiveASCIIICheckLength(key_str.data, name)) continue;
+                    } else {
+                        if (!key.data.e_string.eql(string, name)) continue;
+                    }
                     if (request.package_id == invalid_package_id) {
                         // Duplicate dependency (e.g., "react" in both "dependencies" and
                         // "optionalDependencies"). Remove the old dependency.

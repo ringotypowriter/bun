@@ -175,7 +175,13 @@ it("should allow removing dependency with exact uppercase key", async () => {
     stdout: "ignore",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      // Force the dummy registry (ignore user/global config).
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      // Isolate install cache so this test can't hit disk cache and skip requests.
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   expect(await addExited).toBe(0);
 

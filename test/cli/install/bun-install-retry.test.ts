@@ -55,7 +55,13 @@ it("retries on 500", async () => {
     stdout: "pipe",
     stdin: "pipe",
     stderr: "pipe",
-    env,
+    env: {
+      ...env,
+      // Force the dummy registry (ignore user/global config).
+      BUN_CONFIG_REGISTRY: `${root_url}/`,
+      // Isolate install cache so this test can't hit disk cache and skip requests.
+      BUN_INSTALL_CACHE_DIR: join(package_dir, ".bun-cache"),
+    },
   });
   const err = await stderr.text();
   expect(err).not.toContain("error:");
